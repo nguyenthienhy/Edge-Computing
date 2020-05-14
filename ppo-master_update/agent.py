@@ -109,7 +109,7 @@ avg_rewards_bat_list_dqn = []
 avg_rewards_energy_list_dqn = []
 dqn_data = []
 train_time_slots = 20000
-t_range = 1920
+t_range = 2000
 
 '''
     Myopic algorithm: The calculation to get the next action is implemented in the environment file.
@@ -252,6 +252,7 @@ class N_step_learning:
         self.gamma = 0.1
         self.alpha = 0.1
         self.n_step = 10
+        self.max_find_q_min = 100
         self.observation_space = observation_space
         self.action_space = action_space
         self.memory = deque(maxlen=1000000)
@@ -268,11 +269,10 @@ class N_step_learning:
     def chooseAction(self, state):  # từ một trạng thái lựa chọn một hành động
         if np.random.rand() < self.exploration_rate:
             return random.randrange(self.action_space)
-        max_iter = 1000
         iter = 0
         Q = []
         A = []
-        while iter <= max_iter:
+        while iter <= self.max_find_q_min:
             action = random.uniform(0 , self.action_space)
             q_values = self.model.predict(np.array([np.append(state[0] , action)]))
             Q.append(q_values)
@@ -281,6 +281,7 @@ class N_step_learning:
         min_q = min(Q)
         for i in range(len(Q)):
             if Q[i] == min_q:
+                print(A[i])
                 return A[i]
 
     def get_Q_values(self, state, action):
