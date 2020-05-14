@@ -242,6 +242,10 @@ for i in range(t_range):
 
 #dqn
 
+# Q learning
+
+import math
+
 class N_step_learning:
     def __init__(self, observation_space, action_space):
         self.exploration_rate = 1.0
@@ -253,7 +257,7 @@ class N_step_learning:
         self.memory = deque(maxlen=1000000)
         # the neural network
         self.model = Sequential()
-        self.model.add(Dense(24, input_shape=(observation_space,), activation="relu"))
+        self.model.add(Dense(24, input_shape=(observation_space + action_space , ), activation="relu"))
         self.model.add(Dense(24, activation="relu"))
         self.model.add(Dense(self.action_space, activation="linear"))
         self.model.compile(loss="mse", optimizer=Adam(lr=0.001))
@@ -264,13 +268,24 @@ class N_step_learning:
     def chooseAction(self, state):  # từ một trạng thái lựa chọn một hành động
         if np.random.rand() < self.exploration_rate:
             return random.randrange(self.action_space)
-        q_values = self.model.predict(state)
-        if q_values[0][0] > 0.5:
-            return 1
-        return 0
+        max_iter = 1000
+        iter = 0
+        Q = []
+        A = []
+        while iter <= max_iter:
+            action = random.uniform(0 , self.action_space)
+            q_values = self.model.predict(np.array([np.append(state[0] , action)]))
+            Q.append(q_values)
+            A.append(action)
+            iter += 1
+        min_q = min(Q)
+        for i in range(len(Q)):
+            if Q[i] == min_q:
+                return A[i]
 
     def get_Q_values(self, state, action):
-        q_update = np.amin(self.model.predict(state)[0])
+        state_temp = np.array([np.append(state[0] , action)])
+        q_update = self.model.predict(state_temp)[0]
         self.exploration_rate *= 0.995  # exploration rate
         self.exploration_rate = max(0.01, self.exploration_rate)
         return q_update
@@ -284,7 +299,6 @@ def agent():
     env = gym.make('offload-autoscale-v0', p_coeff=x)
     observation_space = env.observation_space.shape[0]
     action_space = env.action_space.shape[0]
-    print(action_space)
     solver = N_step_learning(observation_space, action_space)
     for _ in range(96):
         state = env.reset()
@@ -300,8 +314,9 @@ def agent():
             num_hour_run += 1
             done = False
             if t < T:
-                next_state, reward, _, _ = env.step(action)
+                next_state, reward, _ , _ = env.step(action)
                 next_state = np.reshape(next_state, [1, observation_space])
+                solver.remember(state, action, reward, next_state, done)
                 states.append(state)
                 rewards.append(reward)
                 t_, bak, bat = env.render()
@@ -315,12 +330,10 @@ def agent():
                 avg_rewards_bat_list_dqn.append(np.mean(rewards_bat_list_dqn[:]))
                 avg_rewards_energy_list_dqn.append(avg_rewards_bak_list_dqn[-1] + avg_rewards_bat_list_dqn[-1])
                 dqn_data.append([avg_rewards_time_list_dqn[-1], avg_rewards_bak_list_dqn[-1], avg_rewards_bat_list_dqn[-1]])
-
                 if num_hour_run >= 24:  # Termination of a single episode , NGƯỠNG ĐỂ KẾT THÚC MỘT EPISODE => chưa rõ
                     T = t + 1
                 else:
                     action = solver.chooseAction(next_state)
-                    solver.remember(state, action, reward, next_state, done)
                     actions.append(action)
 
             tau = t - solver.n_step + 1
@@ -333,9 +346,8 @@ def agent():
                     G += np.power(solver.gamma, solver.n_step) * Q
                 Q_prev = solver.get_Q_values(states[tau], actions[tau])
                 Q_prev += solver.alpha * (G - Q_prev)
-                q_val = solver.model.predict(states[tau])
-                q_val[0][0] = Q_prev
-                solver.model.fit(states[tau] , q_val)
+                state_input = np.array([np.append(states[tau][0] , actions[tau])])
+                solver.model.fit(state_input , [[Q_prev]])
             if tau == T - 1:
                 break
             t += 1
