@@ -281,7 +281,6 @@ class N_step_learning:
         min_q = min(Q)
         for i in range(len(Q)):
             if Q[i] == min_q:
-                print(A[i])
                 return A[i]
 
     def get_Q_values(self, state, action):
@@ -301,7 +300,7 @@ def agent():
     observation_space = env.observation_space.shape[0]
     action_space = env.action_space.shape[0]
     solver = N_step_learning(observation_space, action_space)
-    for _ in range(96):
+    for _ in range(100):
         state = env.reset()
         state = np.reshape(state, [1, observation_space])
         states = [state]
@@ -311,46 +310,47 @@ def agent():
         num_hour_run = 0
         t = 0
         T = math.inf # thời gian tối đa chạy 1 episode
-        while True:
-            num_hour_run += 1
+        while t < 96:
             done = False
-            if t < T:
-                next_state, reward, _ , _ = env.step(action)
-                next_state = np.reshape(next_state, [1, observation_space])
-                solver.remember(state, action, reward, next_state, done)
-                states.append(state)
-                rewards.append(reward)
-                t_, bak, bat = env.render()
-                rewards_list_dqn.append(1 / reward)
-                avg_rewards_dqn.append(np.mean(rewards_list_dqn[:]))
-                rewards_time_list_dqn.append(t_)
-                avg_rewards_time_list_dqn.append(np.mean(rewards_time_list_dqn[:]))
-                rewards_bak_list_dqn.append(bak)
-                avg_rewards_bak_list_dqn.append(np.mean(rewards_bak_list_dqn[:]))
-                rewards_bat_list_dqn.append(bat)
-                avg_rewards_bat_list_dqn.append(np.mean(rewards_bat_list_dqn[:]))
-                avg_rewards_energy_list_dqn.append(avg_rewards_bak_list_dqn[-1] + avg_rewards_bat_list_dqn[-1])
-                dqn_data.append([avg_rewards_time_list_dqn[-1], avg_rewards_bak_list_dqn[-1], avg_rewards_bat_list_dqn[-1]])
-                if num_hour_run >= 24:  # Termination of a single episode , NGƯỠNG ĐỂ KẾT THÚC MỘT EPISODE => chưa rõ
-                    T = t + 1
-                else:
-                    action = solver.chooseAction(next_state)
-                    actions.append(action)
-
-            tau = t - solver.n_step + 1
-            if tau >= 0:
-                G = 0
-                for i in range(tau + 1, min(tau + solver.n_step + 1, T + 1)):
-                    G += np.power(solver.gamma, i - tau - 1) * rewards[i]
-                if tau + solver.n_step < T:
-                    Q = solver.get_Q_values(states[tau + solver.n_step], actions[tau + solver.n_step])
-                    G += np.power(solver.gamma, solver.n_step) * Q
-                Q_prev = solver.get_Q_values(states[tau], actions[tau])
-                Q_prev += solver.alpha * (G - Q_prev)
-                state_input = np.array([np.append(states[tau][0] , actions[tau])])
-                solver.model.fit(state_input , [[Q_prev]])
-            if tau == T - 1:
-                break
+            # if t < T:
+            next_state, reward, _ , _ = env.step(action)
+            next_state = np.reshape(next_state, [1, observation_space])
+            solver.remember(state, action, reward, next_state, done)
+            states.append(state)
+            rewards.append(reward)
+            t_, bak, bat = env.render()
+            rewards_list_dqn.append(1 / reward)
+            avg_rewards_dqn.append(np.mean(rewards_list_dqn[:]))
+            rewards_time_list_dqn.append(t_)
+            avg_rewards_time_list_dqn.append(np.mean(rewards_time_list_dqn[:]))
+            rewards_bak_list_dqn.append(bak)
+            avg_rewards_bak_list_dqn.append(np.mean(rewards_bak_list_dqn[:]))
+            rewards_bat_list_dqn.append(bat)
+            avg_rewards_bat_list_dqn.append(np.mean(rewards_bat_list_dqn[:]))
+            avg_rewards_energy_list_dqn.append(avg_rewards_bak_list_dqn[-1] + avg_rewards_bat_list_dqn[-1])
+            dqn_data.append([avg_rewards_time_list_dqn[-1], avg_rewards_bak_list_dqn[-1], avg_rewards_bat_list_dqn[-1]])
+            # if num_hour_run >= 24:  # Termination of a single episode , NGƯỠNG ĐỂ KẾT THÚC MỘT EPISODE => chưa rõ
+            #     T = t + 1
+            # else:
+            action = solver.chooseAction(next_state)
+            actions.append(action)
+            Q_prev = solver.get_Q_values(states[t-1], actions[t-1]) + solver.alpha * (reward + solver.gamma * solver.get_Q_values(states[t], actions[t]) - solver.get_Q_values(states[t-1], actions[t-1]))
+            state_input = np.array([np.append(states[t][0], actions[t])])
+            solver.model.fit(state_input , [[Q_prev]])
+            # tau = t - solver.n_step + 1
+            # if tau >= 0:
+            #     G = 0
+            #     for i in range(tau + 1, min(tau + solver.n_step + 1, T + 1)):
+            #         G += np.power(solver.gamma, i - tau - 1) * rewards[i]
+            #     if tau + solver.n_step < T:
+            #         Q = solver.get_Q_values(states[tau + solver.n_step], actions[tau + solver.n_step])
+            #         G += np.power(solver.gamma, solver.n_step) * Q
+            #     Q_prev = solver.get_Q_values(states[tau], actions[tau])
+            #     Q_prev += solver.alpha * (G - Q_prev)
+            #     state_input = np.array([np.append(states[tau][0] , actions[tau])])
+            #     solver.model.fit(state_input , [[Q_prev]])
+            # if tau == T - 1:
+            #     break
             t += 1
 agent()
 
