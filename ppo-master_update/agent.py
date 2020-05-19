@@ -246,7 +246,7 @@ for i in range(t_range):
 
 import math
 
-class N_step_learning:
+class Q_learning:
     def __init__(self, observation_space, action_space):
         self.exploration_rate = 1.0
         self.gamma = 0.1
@@ -266,7 +266,7 @@ class N_step_learning:
     def remember(self, state, action, reward, next_state, terminal):
         self.memory.append((state, action, reward, next_state, terminal))
 
-    def chooseAction(self, state):  # từ một trạng thái lựa chọn một hành động
+    def chooseAction(self, state, cur_q_value):  # từ một trạng thái lựa chọn một hành động
         if np.random.rand() < self.exploration_rate:
             return random.randrange(self.action_space)
         iter = 0
@@ -274,7 +274,10 @@ class N_step_learning:
         A = []
         while iter <= self.max_find_q_min:
             action = random.uniform(0 , self.action_space)
-            q_values = self.model.predict(np.array([np.append(state[0] , action)]))
+            _, reward, _, _ = env.step(action)
+            # q_values = self.model.predict(np.array([np.append(state[0] , action)]))
+
+            q_values = cur_q_value + self.alpha * (reward + self.gamma * self.get_Q_values(state, action) - cur_q_value)
             Q.append(q_values)
             A.append(action)
             iter += 1
@@ -299,20 +302,22 @@ def agent():
     env = gym.make('offload-autoscale-v0', p_coeff=x)
     observation_space = env.observation_space.shape[0]
     action_space = env.action_space.shape[0]
-    solver = N_step_learning(observation_space, action_space)
+    solver = Q_learning(observation_space, action_space)
     for _ in range(100):
         state = env.reset()
         state = np.reshape(state, [1, observation_space])
         states = [state]
-        action = solver.chooseAction(state) # lựa chọn hành động ban đầu theo chính sách pi
-        actions = [action]
         rewards = [0]
-        num_hour_run = 0
+        q_value_storage = 0
+        actions = []
+        # num_hour_run = 0
         t = 0
-        T = math.inf # thời gian tối đa chạy 1 episode
+        # T = math.inf # thời gian tối đa chạy 1 episode
         while t < 96:
             done = False
             # if t < T:
+            action = solver.chooseAction(state, q_value_storage[-1]) # lựa chọn hành động ban đầu theo chính sách pi
+            actions.append(action)
             next_state, reward, _ , _ = env.step(action)
             next_state = np.reshape(next_state, [1, observation_space])
             solver.remember(state, action, reward, next_state, done)
@@ -332,10 +337,11 @@ def agent():
             # if num_hour_run >= 24:  # Termination of a single episode , NGƯỠNG ĐỂ KẾT THÚC MỘT EPISODE => chưa rõ
             #     T = t + 1
             # else:
-            action = solver.chooseAction(next_state)
+            action = solver.chooseAction(next_state, q_value_storage)
             actions.append(action)
-            Q_prev = solver.get_Q_values(states[t-1], actions[t-1]) + solver.alpha * (reward + solver.gamma * solver.get_Q_values(states[t], actions[t]) - solver.get_Q_values(states[t-1], actions[t-1]))
+            Q_prev = q_value_storage + solver.alpha * (reward + solver.gamma * solver.get_Q_values(states[t], actions[t]) - q_value_storage)))
             state_input = np.array([np.append(states[t][0], actions[t])])
+            q_value_storage 
             solver.model.fit(state_input , [[Q_prev]])
             # tau = t - solver.n_step + 1
             # if tau >= 0:
@@ -374,7 +380,8 @@ print(len(avg_rewards_fixed_2[: t_range]))
 print(len(avg_rewards_dqn[: t_range]))
 
 #total cost
-df=pd.DataFrame({'x': range(t_range), 'y_1': avg_rewards_ppo[ : t_range], 'y_2': avg_rewards_random[: t_range], 'y_3': avg_rewards_myopic[ : t_range], 'y_4': avg_rewards_fixed_1[: t_range], 'y_5': avg_rewards_fixed_2[: t_range], 'y_6': avg_rewards_dqn[ : t_range]})
+# df=pd.DataFrame({'x': range(t_range), 'y_1': avg_rewards_ppo[ : t_range], 'y_2': avg_rewards_random[: t_range], 'y_3': avg_rewards_myopic[ : t_range], 'y_4': avg_rewards_fixed_1[: t_range], 'y_5': avg_rewards_fixed_2[: t_range], 'y_6': avg_rewards_dqn[ : t_range]})
+df=pd.DataFrame({'y_6': avg_rewards_dqn[ : t_range]})
 df.transpose()
 plt.xlabel("Time Slot")
 plt.ylabel("Time Average Cost")
@@ -383,7 +390,7 @@ plt.plot('x', 'y_2', data=df, marker='^', markevery = int(t_range/10), color='ol
 plt.plot('x', 'y_3', data=df, marker='s', markevery = int(t_range/10), color='cyan', linewidth=1, label="myopic")
 plt.plot('x', 'y_4', data=df, marker='*', markevery = int(t_range/10), color='skyblue', linewidth=1, label="fixed 0.4kW")
 plt.plot('x', 'y_5', data=df, marker='+', markevery = int(t_range/10), color='navy', linewidth=1, label="fixed 1kW")
-plt.plot('x', 'y_6', data=df, marker='x', markevery = int(t_range/10), color='green', linewidth=1, label="n-step learning")
+plt.plot('x', 'y_6', data=df, marker='x', markevery = int(t_range/10), color='green', linewidth=1, label="q-learning")
 plt.legend()
 plt.grid()
 '''
