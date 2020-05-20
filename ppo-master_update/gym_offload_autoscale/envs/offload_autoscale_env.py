@@ -32,13 +32,13 @@ class OffloadAutoscaleEnv(gym.Env):
             self.b_high,
             self.h_high,
             self.e_high])
-        
+
         r_low = np.array([
             self.lamda_low,
             self.b_low,
             self.h_low,
             self.e_low])
-        
+
         self.observation_space = spaces.Box(low=r_low, high=r_high)
         self.action_space = spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32)
         #note, the action space is normalized to the [0,1] range, will need to be mapped back to the correct action space later via the de_state variable in the cal() function
@@ -58,7 +58,7 @@ class OffloadAutoscaleEnv(gym.Env):
         ##C.Power model
         ##note: d = d_op + d_com, where
         ##      (1) d_op = d_sta + d_dyn :the power demand by the base station
-        ##      (1a) d_sta: static power consumption by the base station 
+        ##      (1a) d_sta: static power consumption by the base station
         ##      (1b) d_dyn: dynamic power consumption by the base station
         ##      (2) d_com = d_com = μ * α + server_power_consumption * m (formula & coefficient α not specified in the paper, our own proposal)
         ##                                                               (α = server_power_consumption/lamda_low)
@@ -85,11 +85,11 @@ class OffloadAutoscaleEnv(gym.Env):
         self.back_up_cost_coef = 0.15
         ###normalized unit depreciation cost ω
         self.normalized_unit_depreciation_cost = 0.01 # chi phí khấu hao trên từng unit
-        
+
         #coefficent to show the priority of enery cost vs. time delay cost in the reward function
         self.priority_coefficent = p_coeff
-        
-        #environment parameters to track the timesteps in training the agent 
+
+        #environment parameters to track the timesteps in training the agent
         self.time_steps_per_episode = 96
         self.episode = 0
         self.time_step = 0
@@ -175,7 +175,7 @@ class OffloadAutoscaleEnv(gym.Env):
         lamd, _, h, _ = self.state
         opt_val = math.inf
         ans = [-1, -1]
-        #loop through all possible (m, μ) based on m 
+        #loop through all possible (m, μ) based on m
         for m in range(1, self.max_number_of_server + 1):
             normalized_min_cov = self.lamda_low
             mu = (de_action - self.server_power_consumption * m) * normalized_min_cov / self.server_power_consumption
@@ -185,6 +185,8 @@ class OffloadAutoscaleEnv(gym.Env):
                     ans = [m, mu]
                     opt_val = self.cost_function(m, mu, h, lamd)
         return ans
+
+
     def cost_function(self, m, mu, h, lamda): #calculate the delay cost based on m, μ, h, λ
         return self.cost_delay_local_function(m, mu) + self.cost_delay_cloud_function(mu, h, lamda)
     def cost_delay_local_function(self, m, mu):
@@ -192,10 +194,10 @@ class OffloadAutoscaleEnv(gym.Env):
         return mu / (m * self.server_service_rate - mu)
     def cost_delay_cloud_function(self, mu, h, lamda):
         return (lamda - mu) * h
-    def check_constraints(self, m, mu): #check (m, μ) pair 
-        if mu > self.state[0] or mu < 0: return False #if local workload is more than total workload or local workload is negative: invalid (m, μ) pair 
+    def check_constraints(self, m, mu): #check (m, μ) pair
+        if mu > self.state[0] or mu < 0: return False #if local workload is more than total workload or local workload is negative: invalid (m, μ) pair
         if isinstance(self.mu, complex): return False #not needed
-        if m * self.server_service_rate <= mu: return False #if local workload is more than the service capability that the activated edge servers are able to provide: invalid (m, μ) pair 
+        if m * self.server_service_rate <= mu: return False #if local workload is more than the service capability that the activated edge servers are able to provide: invalid (m, μ) pair
         return True
 
     #reward function
@@ -208,6 +210,7 @@ class OffloadAutoscaleEnv(gym.Env):
         cost_delay_wireless = 0
         # calculate m(t) & μ(t) from a(t)
         self.m, self.mu = self.cal(action)
+        print(str(self.m) + " " + str(self.mu))
         #(1) cost_delay
         cost_delay = self.cost_function(self.m, self.mu, h, lamda) + cost_delay_wireless
         #(2)(3) c_bat & c_bak
@@ -255,7 +258,7 @@ class OffloadAutoscaleEnv(gym.Env):
         self.d = self.d_op + self.d_com #not needed, only used to print intermediate results
         # print('\t{:20}{:20}{:20}{:20}{:10}'.format('d_op','d_com','d','number_server','local_workload'))
         # print('\t{:<20.3f}{:<20.3f}{:<20.3f}{:<20.3f}{:<10.3f}'.format(d_op, d_com, d, number_of_server, local_workload))
-        
+
         #calculate reward
         reward = self.reward_func(action)
 
@@ -321,6 +324,8 @@ class OffloadAutoscaleEnv(gym.Env):
                     params = [m, res.x]
             d_com = self.server_power_consumption*params[0]+self.server_power_consumption/self.lamda_low*params[1]
             return self.fixed_action_cal(d_com)
+app = OffloadAutoscaleEnv(0.5)
+print(app.get_m_mu(8000))
 # MyEnv = OffloadAutoscaleEnv()
 # MyEnv.reset()
 # MyEnv.render()
