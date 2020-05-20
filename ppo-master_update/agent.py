@@ -12,6 +12,8 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 
+np.random.seed(3)
+
 start_time = time.time()
 
 rand_seed = 1234
@@ -24,10 +26,10 @@ x = 0.5
 class N_step_learning:
 
     def __init__(self, observation_space, action_space):
-        self.gamma = 0.1
-        self.alpha = 0.1
+        self.gamma = 0.01
+        self.alpha = 0.01
         self.n_step = 10
-        self.max_find_q_min = 400
+        self.max_find_q_min = 200
         self.observation_space = observation_space
         self.action_space = action_space
         self.memory = deque(maxlen=1000000)
@@ -42,11 +44,11 @@ class N_step_learning:
     def remember(self, state, q_values):
         self.memory.append((state, q_values))
 
-    def chooseAction(self, state , max_find_q_min):  # từ một trạng thái lựa chọn một hành động
+    def chooseAction(self, state):  # từ một trạng thái lựa chọn một hành động
         iter = 0
         Q = []
         A = []
-        while iter <= max_find_q_min:
+        while iter <= self.max_find_q_min:
             action = random.random() # chọn random action trong khoảng [0 , 1]
             q_values = self.model.predict(np.array([np.append(state[0] , action)]))
             Q.append(q_values)
@@ -64,8 +66,7 @@ class N_step_learning:
         return q_update
 
 
-def agent(alpha , gamma , n_step , max_find_q_min):
-    np.random.seed(3)
+def agent():
     # dqn
     rewards_list_dqn = []
     avg_rewards_dqn = []
@@ -83,16 +84,12 @@ def agent(alpha , gamma , n_step , max_find_q_min):
     observation_space = env.observation_space.shape[0]
     action_space = env.action_space.shape[0]
     solver = N_step_learning(observation_space, action_space)
-    solver.alpha = alpha
-    solver.gamma = gamma
-    solver.n_step = n_step
-    solver.max_find_q_min = max_find_q_min
 
     for _ in range(96):
         state = env.reset()
         state = np.reshape(state, [1, observation_space])
         states = [state]
-        action = solver.chooseAction(state , max_find_q_min) # lựa chọn hành động ban đầu theo chính sách pi
+        action = solver.chooseAction(state) # lựa chọn hành động ban đầu theo chính sách pi
         actions = [action]
         rewards = [0]
         num_hour_run = 0
@@ -100,6 +97,7 @@ def agent(alpha , gamma , n_step , max_find_q_min):
         T = math.inf # thời gian tối đa chạy 1 episode
         while True:
             num_hour_run += 1
+
             if t < T:
 
                 next_state, reward, _ , _ = env.step(action)
@@ -118,23 +116,23 @@ def agent(alpha , gamma , n_step , max_find_q_min):
                 avg_rewards_energy_list_dqn.append(avg_rewards_bak_list_dqn[-1] + avg_rewards_bat_list_dqn[-1])
                 dqn_data.append([avg_rewards_time_list_dqn[-1], avg_rewards_bak_list_dqn[-1], avg_rewards_bat_list_dqn[-1]])
 
-                if num_hour_run >= 24:
+                if num_hour_run >= t_range / solver.n_step:
                     T = t + 1
                 else:
-                    action = solver.chooseAction(next_state , max_find_q_min)
+                    action = solver.chooseAction(next_state)
                     actions.append(action)
 
-            tau = t - n_step + 1
+            tau = t - solver.n_step + 1
 
             if tau >= 0:
                 G = 0
-                for i in range(tau + 1, min(tau + n_step + 1, T + 1)):
-                    G += np.power(gamma, i - tau - 1) * rewards[i]
+                for i in range(tau + 1, min(tau + solver.n_step + 1, T + 1)):
+                    G += np.power(solver.gamma, i - tau - 1) * rewards[i]
                 if tau + solver.n_step < T:
-                    Q = solver.get_Q_values(states[tau + n_step], actions[tau + n_step])
-                    G += np.power(gamma, n_step) * Q
+                    Q = solver.get_Q_values(states[tau + solver.n_step], actions[tau + solver.n_step])
+                    G += np.power(solver.gamma, solver.n_step) * Q
                 Q_prev = solver.get_Q_values(states[tau], actions[tau])
-                Q_prev += alpha * (G - Q_prev)
+                Q_prev += solver.alpha * (G - Q_prev)
                 state_input = np.array([np.append(states[tau][0] , actions[tau])])
                 solver.memory.append((state_input[0], Q_prev))
                 solver.model.fit(state_input , [[Q_prev]])
@@ -144,36 +142,11 @@ def agent(alpha , gamma , n_step , max_find_q_min):
 
             t += 1
 
-    plotGraphCost(alpha , gamma , n_step , max_find_q_min , avg_rewards_dqn , avg_rewards_time_list_dqn , avg_rewards_bak_list_dqn , avg_rewards_bat_list_dqn , t_range)
+    plotGraphCost(solver.alpha , solver.gamma , solver.n_step , solver.max_find_q_min , avg_rewards_dqn , avg_rewards_time_list_dqn , avg_rewards_bak_list_dqn , avg_rewards_bat_list_dqn , t_range)
     return avg_rewards_dqn[-1]
 
-def tuning_parameters():
-    alpha_array = [0.1]
-    gamma_array = [0.1]
-    n_steps = list(range(1 , 10))
-    max_find_q_mins = list(range(10 , 500 , 5))
 
-    return alpha_array , gamma_array , n_steps , max_find_q_mins
-
-def runningTuning():
-    alpha_optimize , gamma_optimize , n_step_optimize , max_find_optimize = 0 , 0 , 0 , 0
-    # tuning alpha_array
-    alpha_arrays , gamma_array , n_steps , max_find_q_mins , = tuning_parameters()
-    min_Cost = math.inf
-    for alpha in alpha_arrays:
-        for gamma in gamma_array:
-            for n_step in n_steps:
-                for max_find in max_find_q_mins:
-                    min_Cost = min(min_Cost , agent(alpha , gamma , n_step , max_find))
-    for alpha in alpha_arrays:
-        for gamma in gamma_array:
-            for n_step in n_steps:
-                for max_find_iter in max_find_q_mins:
-                    if min_Cost == agent(alpha , gamma , n_step , max_find_iter):
-                        alpha_optimize , gamma_optimize , n_step_optimize , max_find_optimize = alpha , gamma , n_step , max_find_iter
-    return min_Cost , alpha_optimize , gamma_optimize , n_step_optimize , max_find_optimize
-
-def plotGraphCost(alpha , gamma , n_step , max_find_q_min , avg_rewards_dqn , avg_rewards_time_list_dqn , avg_rewards_bak_list_dqn , avg_rewards_bat_list_dqn , t_range):
+def plotGraphCost(alpha ,  gamma , n_step , max_find_q_min , avg_rewards_dqn , avg_rewards_time_list_dqn , avg_rewards_bak_list_dqn , avg_rewards_bat_list_dqn , t_range):
 
     print('--RESULTS--')
     print('{:15}{:<30}{:<10.5}{:<10.5}{:<10.5}'.format('dqn',avg_rewards_dqn[-1], avg_rewards_time_list_dqn[-1], avg_rewards_bak_list_dqn[-1], avg_rewards_bat_list_dqn[-1]))
@@ -190,9 +163,7 @@ def plotGraphCost(alpha , gamma , n_step , max_find_q_min , avg_rewards_dqn , av
     plt.legend()
     plt.grid()
     plt.savefig("./results/" + "alpha = " + str(alpha) + ", " + "gamma = " + str(gamma) + ", " + "n_step = " + str(n_step) + ", " + "max_find_q_min = " + str(max_find_q_min) + ".png")
+    plt.show()
     plt.close()
 
-min_Cost , alpha_optimize , gamma_optimize , n_step_optimize , max_find = runningTuning()
-
-with open("parameters.txt" , "a") as f:
-    f.write(str(min_Cost) + " " + str(alpha_optimize) + " " + str(gamma_optimize) + " " + str(n_step_optimize) + " " + str(max_find))
+agent()

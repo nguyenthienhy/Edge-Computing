@@ -210,7 +210,7 @@ class OffloadAutoscaleEnv(gym.Env):
         cost_delay_wireless = 0
         # calculate m(t) & μ(t) from a(t)
         self.m, self.mu = self.cal(action)
-        print(str(self.m) + " " + str(self.mu))
+        print("Action : " + str(action))
         #(1) cost_delay
         cost_delay = self.cost_function(self.m, self.mu, h, lamda) + cost_delay_wireless
         #(2)(3) c_bat & c_bak
