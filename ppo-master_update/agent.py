@@ -296,8 +296,7 @@ class Q_learning:
 set_seed(rand_seed)
 obs = env.reset()
 
-# vì đây là miền liên tục nên các giá trị Q_values sẽ được học qua từng vòng lặp để cải thiện
-# việc lựa chọn action ở các bước tiếp theo
+
 def agent():
     env = gym.make('offload-autoscale-v0', p_coeff=x)
     observation_space = env.observation_space.shape[0]
